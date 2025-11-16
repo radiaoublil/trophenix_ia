@@ -9,12 +9,18 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [cvResult, setCvResult] = useState(null)
   const [error, setError] = useState(null)
+  const [transcript, setTranscript] = useState('')
+  const [pendingName, setPendingName] = useState('Utilisateur')
+  const [email, setEmail] = useState('')
+  const [view, setView] = useState('recorder') // 'recorder' | 'transcript' | 'cv-ready'
 
   // Appeler quand un enregistrement est pret
   async function handleAudioReady(blob, filename = 'enregistrement.wav', name = 'Utilisateur') {
     setLoading(true)
     setError(null)
     setCvResult(null)
+    setTranscript('')
+    setView('recorder')
 
     try {
       // 1) Envoyer l'audio a `/transcribe_audio`
@@ -32,12 +38,33 @@ export default function App() {
 
       const tJson = await tResp.json()
       const transcript = tJson.transcript || ''
+      setTranscript(transcript)
+      setPendingName(name || 'Utilisateur')
+      setView('transcript')
 
-      // 2) Envoyer le transcript vers le point de generation de CV
+    } catch (err) {
+      console.error(err)
+      setError(String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleGenerateCv() {
+    if (!transcript.trim()) {
+      setError('Le texte transcrit est vide. Modifiez-le ou relancez un enregistrement.')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setCvResult(null)
+
+    try {
       const gResp = await fetch(`${BACKEND_URL}/generate_cv_from_text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ name, email: '', message: transcript })
+        body: new URLSearchParams({ name: pendingName, email, message: transcript })
       })
 
       if (!gResp.ok) {
@@ -46,6 +73,7 @@ export default function App() {
 
       const gJson = await gResp.json()
       setCvResult(gJson)
+      setView('cv-ready')
 
     } catch (err) {
       console.error(err)
@@ -53,6 +81,90 @@ export default function App() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function renderRecorderView() {
+    return (
+      <>
+        <Recorder onReady={handleAudioReady} />
+
+        {loading && view === 'recorder' && (
+          <div className="notice">Traitement en cours... merci de patienter</div>
+        )}
+        {error && view === 'recorder' && <div className="error">Erreur : {error}</div>}
+      </>
+    )
+  }
+
+  function handleReset() {
+    setTranscript('')
+    setCvResult(null)
+    setError(null)
+    setPendingName('Utilisateur')
+    setEmail('')
+    setView('recorder')
+  }
+
+  function renderTranscriptView() {
+    return (
+      <section className="transcript-page">
+        <div className="transcript-page-head">
+          <p className="muted">Transcription prête</p>
+          <h2>Etape 2 — Vérifiez et ajustez la transcription avant de générer le CV.</h2>
+        </div>
+
+        <div className="transcript-fields">
+          <label>
+            <span>Nom</span>
+            <input value={pendingName} onChange={e => setPendingName(e.target.value)} />
+          </label>
+          <label>
+            <span>Email</span>
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="optionnel" />
+          </label>
+        </div>
+
+        <textarea
+          className="transcript-editor"
+          value={transcript}
+          onChange={e => setTranscript(e.target.value)}
+        />
+
+        {loading && <div className="notice">Génération du CV en cours...</div>}
+        {error && <div className="error">Erreur : {error}</div>}
+
+        <div className="transcript-actions">
+          <button className="button ghost back-button" onClick={handleReset} disabled={loading}>
+            Revenir à l'enregistrement
+          </button>
+          <button className="button" onClick={handleGenerateCv} disabled={loading}>
+            Valider et générer le CV
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  function renderCvReadyView() {
+    if (!cvResult) return renderRecorderView()
+
+    return (
+      <section className="cv-ready">
+        <p className="muted">Votre transcription a été envoyée avec succès.</p>
+        <h2>Votre CV est prêt</h2>
+        <p className="muted">Téléchargez le document généré ou recommencez un enregistrement.</p>
+        {cvResult.cv_path ? (
+          <a className="button download" href={cvResult.cv_path} target="_blank" rel="noreferrer">
+            Télécharger le CV
+          </a>
+        ) : (
+          <pre>{JSON.stringify(cvResult.cv_json || cvResult, null, 2)}</pre>
+        )}
+        <button className="button ghost" onClick={() => { setView('recorder'); setTranscript(''); setCvResult(null); }}>
+          Générer un autre CV
+        </button>
+      </section>
+    )
   }
 
   return (
@@ -64,21 +176,9 @@ export default function App() {
       </header>
 
       <main>
-        <Recorder onReady={handleAudioReady} />
-
-        {loading && <div className="notice">Traitement en cours... merci de patienter</div>}
-        {error && <div className="error">Erreur : {error}</div>}
-
-        {cvResult && (
-          <section className="cv-result">
-            <h2>CV genere (JSON)</h2>
-            <pre>{JSON.stringify(cvResult.cv_json || cvResult, null, 2)}</pre>
-
-            {cvResult.cv_path && (
-              <a className="button" href={cvResult.cv_path} target="_blank" rel="noreferrer">Telecharger le CV</a>
-            )}
-          </section>
-        )}
+        {view === 'cv-ready' && renderCvReadyView()}
+        {view === 'transcript' && renderTranscriptView()}
+        {view === 'recorder' && renderRecorderView()}
       </main>
 
     </div>

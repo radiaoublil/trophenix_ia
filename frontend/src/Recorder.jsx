@@ -30,6 +30,7 @@ export default function Recorder({ onReady }) {
   const [name, setName] = useState('')
 
   const mediaRecorderRef = useRef(null)
+  const mediaStreamRef = useRef(null)
   const chunksRef = useRef([])
   const audioCtxRef = useRef(null)
   const analyserRef = useRef(null)
@@ -257,6 +258,7 @@ export default function Recorder({ onReady }) {
     try {
       await setupGui()
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      mediaStreamRef.current = stream
 
       const mr = new MediaRecorder(stream)
       mediaRecorderRef.current = mr
@@ -301,16 +303,38 @@ export default function Recorder({ onReady }) {
 
   function stop(silent = false) {
     const mr = mediaRecorderRef.current
-    if (mr && mr.state !== 'inactive') {
-      mr.stop()
-      mr.stream?.getTracks?.forEach(t => t.stop())
+    try {
+      if (mr && mr.state !== 'inactive') {
+        mr.stop()
+      }
+      const stream = mediaStreamRef.current || mr?.stream
+      if (stream) {
+        stream.getTracks?.forEach((track) => {
+          try {
+            if (track.readyState !== 'ended') track.stop()
+          } catch (err) {
+            console.warn('Impossible d\'arreter une piste audio', err)
+          }
+        })
+      }
+      mediaStreamRef.current = null
+      mediaRecorderRef.current = null
+      resetVisualization()
+      analyserRef.current = null
+      freqsRef.current = null
+      if (audioCtxRef.current) {
+        try {
+          audioCtxRef.current.close()
+        } catch (_) {
+          /* ignore */
+        }
+        audioCtxRef.current = null
+      }
+    } catch (err) {
+      console.warn('Erreur lors de l\'arrêt de l\'enregistrement', err)
+    } finally {
+      if (!silent) setRecording(false)
     }
-    resetVisualization()
-    analyserRef.current = null
-    freqsRef.current = null
-    audioCtxRef.current?.close?.()
-    audioCtxRef.current = null
-    if (!silent) setRecording(false)
   }
 
   async function send() {
