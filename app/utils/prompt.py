@@ -13,7 +13,7 @@ Format attendu :
 Renvoie uniquement un objet JSON avec les champs suivants :
 
 - identite : nom, prénom, âge, ville, email, téléphone
-- profil : résumé professionnel en 1 à 2 phrases orienté reconversion, Reformuler le profil en style professionnel à la 3ᵉ personne (ne pas utiliser "je", "moi".)
+- profil : résumé professionnel en 1 à 2 phrases orienté reconversion, Reformuler le profil en style professionnel à la 1ᵉ personne (utiliser "je", "moi".)
 - experiences : liste d’objets (poste, organisation, date_debut, date_fin, description --> missions reformulées)
 - formations : liste d’objets (diplome, ecole, annee)
 - competences :
