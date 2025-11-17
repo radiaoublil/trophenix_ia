@@ -7,6 +7,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000'
 
 export default function App() {
   const [loading, setLoading] = useState(false)
+  const [loadingStage, setLoadingStage] = useState(null)
   const [cvResult, setCvResult] = useState(null)
   const [error, setError] = useState(null)
   const [transcript, setTranscript] = useState('')
@@ -17,6 +18,7 @@ export default function App() {
   // Appeler quand un enregistrement est pret
   async function handleAudioReady(blob, filename = 'enregistrement.wav', name = 'Utilisateur') {
     setLoading(true)
+    setLoadingStage('transcription')
     setError(null)
     setCvResult(null)
     setTranscript('')
@@ -47,6 +49,7 @@ export default function App() {
       setError(String(err))
     } finally {
       setLoading(false)
+      setLoadingStage(null)
     }
   }
 
@@ -57,6 +60,7 @@ export default function App() {
     }
 
     setLoading(true)
+    setLoadingStage('cv')
     setError(null)
     setCvResult(null)
 
@@ -80,17 +84,15 @@ export default function App() {
       setError(String(err))
     } finally {
       setLoading(false)
+      setLoadingStage(null)
     }
   }
 
   function renderRecorderView() {
     return (
       <>
-        <Recorder onReady={handleAudioReady} />
+        <Recorder onReady={handleAudioReady} isBusy={loading} />
 
-        {loading && view === 'recorder' && (
-          <div className="notice">Traitement en cours... merci de patienter</div>
-        )}
         {error && view === 'recorder' && <div className="error">Erreur : {error}</div>}
       </>
     )
@@ -103,6 +105,7 @@ export default function App() {
     setPendingName('Utilisateur')
     setEmail('')
     setView('recorder')
+    setLoadingStage(null)
   }
 
   function renderTranscriptView() {
@@ -181,6 +184,25 @@ export default function App() {
         {view === 'recorder' && renderRecorderView()}
       </main>
 
+      {loading && <LoadingOverlay stage={loadingStage} />}
+
+    </div>
+  )
+}
+
+function LoadingOverlay({ stage }) {
+  const message = stage === 'cv'
+    ? 'Génération du CV en cours...'
+    : stage === 'transcription'
+      ? 'Analyse de l\'audio en cours...'
+      : 'Chargement...'
+
+  return (
+    <div className="loading-overlay" role="status" aria-live="polite">
+      <div className="loading-box">
+        <span className="loading-spinner" aria-hidden="true"></span>
+        <p>{message}</p>
+      </div>
     </div>
   )
 }

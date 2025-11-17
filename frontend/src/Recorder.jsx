@@ -23,7 +23,7 @@ const defaultOpts = {
 
 const cloneOpts = () => JSON.parse(JSON.stringify(defaultOpts))
 
-export default function Recorder({ onReady }) {
+export default function Recorder({ onReady, isBusy = false }) {
   const [recording, setRecording] = useState(false)
   const [blobUrl, setBlobUrl] = useState(null)
   const [mediaSupported, setMediaSupported] = useState(true)
@@ -41,6 +41,7 @@ export default function Recorder({ onReady }) {
   const canvasCtxRef = useRef(null)
   const optsRef = useRef(cloneOpts())
   const guiRef = useRef(null)
+  const recordingRef = useRef(false)
 
   useEffect(() => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -212,6 +213,7 @@ export default function Recorder({ onReady }) {
   }
 
   function visualize() {
+    if (!recordingRef.current) return
     const analyser = analyserRef.current
     const canvas = canvasRef.current
     const ctx = canvasCtxRef.current
@@ -240,7 +242,9 @@ export default function Recorder({ onReady }) {
     drawPath(1, width, height)
     drawPath(2, width, height)
 
-    vizFrameRef.current = requestAnimationFrame(visualize)
+    if (recordingRef.current) {
+      vizFrameRef.current = requestAnimationFrame(visualize)
+    }
   }
 
   function resetVisualization() {
@@ -255,6 +259,7 @@ export default function Recorder({ onReady }) {
   }
 
   async function start() {
+    if (isBusy) return
     try {
       await setupGui()
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -291,6 +296,7 @@ export default function Recorder({ onReady }) {
         canvasCtxRef.current = canvas.getContext('2d')
       }
 
+      recordingRef.current = true
       visualize()
       setRecording(true)
       setMediaSupported(true)
@@ -333,12 +339,13 @@ export default function Recorder({ onReady }) {
     } catch (err) {
       console.warn('Erreur lors de l\'arrêt de l\'enregistrement', err)
     } finally {
+      recordingRef.current = false
       if (!silent) setRecording(false)
     }
   }
 
   async function send() {
-    if (!blobUrl) return
+    if (!blobUrl || isBusy) return
     const res = await fetch(blobUrl)
     const blob = await res.blob()
 
@@ -367,17 +374,17 @@ export default function Recorder({ onReady }) {
       </div>
 
       <div className="voice-actions">
-        <button
-           className="voice-btn start"
-           onClick={start}
-           disabled={recording}
-        >
+          <button
+            className="voice-btn start"
+            onClick={start}
+            disabled={recording || isBusy}
+          >
            Commencer l'enregistrement
         </button>
         <button
            className="voice-btn stop"
            onClick={() => stop()}
-           disabled={!recording}
+            disabled={!recording || isBusy}
         >
            Arrêter l'enregistrement
         </button>
@@ -393,7 +400,9 @@ export default function Recorder({ onReady }) {
           {blobUrl ? (
             <>
               <audio controls src={blobUrl}></audio>
-              <button className="button" onClick={send}>Envoyer et générer le CV</button>
+              <button className="button" onClick={send} disabled={isBusy}>
+                {isBusy ? 'Envoi...' : 'Envoyer et générer le CV'}
+              </button>
             </>
           ) : (
             <p>Aucun enregistrement pour l’instant.</p>
