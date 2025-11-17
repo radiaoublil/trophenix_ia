@@ -18,11 +18,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+SUPPORTED_TYPES = {
+    "audio/wav",
+    "audio/x-wav",
+    "audio/mpeg",    
+    "audio/mp4",      
+    "audio/ogg",
+    "audio/webm",    
+    "video/mp4"     
+}
+
 # === Endpoint de transcription ===
 @app.post("/transcribe_audio")
 async def transcribe_audio_endpoint(audio: UploadFile = File(...)):
     """Reçoit un audio et retourne la transcription brute (sans correction)"""
-    if not audio.filename.lower().endswith((".wav", ".mp3", ".m4a", ".ogg")):
+    if audio.content_type not in SUPPORTED_TYPES:
         raise HTTPException(400, "Format audio non supporté")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio.filename)[1]) as tmp:
